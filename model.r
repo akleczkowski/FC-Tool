@@ -1,51 +1,74 @@
 ## model ----
 
-# time is in weeks and timespan is a year
-times<-seq(0,52,by=1)
+# time output is in years; time span is hard coded for 5 years for control followed by 20 years
+#time.stop<-5 # now moved to params (not yet implemeneted in data dump)
+time.end<-25
+times<-seq(0,time.end,by=1)
 
 # differential equation(s)
-# at the moment it is a simple logistic equation with control
+# at the moment it is a simple SIR model with harvesting; there is no threshold
 forest<-function(t,y,params){
   with(as.list(c(params, y)), {
+    # a fudge to mimic extinction of disease
+    Ivar<-ifelse(I<1/N,1e-10,I)
     # RHS of equations come here
-    dS<- -beta*S*I/N
-    dI<-beta*S*I/N-effort*contr*I
+    dS<- -beta*S*Ivar/N
+    dI<-beta*S*Ivar/N-effort*contr*Ivar*ifelse((t>=time.start) & (t<=time.stop),1,0)
     doty<-c(dS,dI)
     return(list(doty))
   })
 }
 
 # profit functions
-profit<-function(S,I,params,contr.switch=1,control.prop=0){
+damage<-function(S,I,params,contr.switch=1,control.prop=0){
   with(as.list(c(params)), {
-    # profit function here
+    # profit function
+    # assumes that S and I are vectors over time, not single snapshots
+    # losses are of two types: single snapshot at time (timber) or accumulating over time (recreation, landscape, biodiversity, carbon)
+    # all are assumed to be linear with number of infected
+    value.lost.timber<-value.timber*(N-S)
+    value.lost.recreation<-value.recreation*(N-S)
+    value.lost.landscape<-value.landscape*(N-S)
+    value.lost.biodiversity<-value.biodiversity*(N-S)
+    value.lost.carbon<-value.carbon*(N-S)
+    value.lost<-value.lost.timber*exp(-d.rate*times)+apply((value.lost.recreation+value.lost.landscape+value.lost.biodiversity+value.lost.carbon)*exp(-d.rate*times),2,cumsum)
+    # value is current but discounted
+    # control is discounted and then integrated 
     # two possibilities selected by control.prop:
     # is control proportional to the number of infected trees, or to all trees?
-  if (control.prop==0){
-    profit.run<-value*S-contr.switch*cumsum(exp(-d.rate*times/52)*effort*control.cost)
-  } else {
-    profit.run<-value*S-contr.switch*cumsum(exp(-d.rate*times/52)*effort*control.cost*I/N)
-  }
-  return(profit.run)
+    if (control.prop==0){
+#      damage.run<-value.lost+contr.switch*cumsum(exp(-d.rate*times)*effort*control.cost*ifelse(times<=time.stop,1,0))
+      damage.run<-value.lost+contr.switch*apply(exp(-d.rate*times)*effort*control.cost*ifelse(times<=time.stop,1,0),2,cumsum)
+    } else {
+#      damage.run<-value.lost+contr.switch*cumsum(exp(-d.rate*times)*effort*control.cost*ifelse(times<=time.stop,1,0)*I)
+      damage.run<-value.lost+contr.switch*apply(exp(-d.rate*times)*effort*control.cost*ifelse(times<=time.stop,1,0)*I,2,cumsum)
+    }
+    return(damage.run)
+  })
+}
+## this needs to be done better ----
+# as now costs arer enetered twice
+costs<-function(S,I,params,contr.switch=1,control.prop=0){
+  with(as.list(c(params)), {
+    if (control.prop==0){
+      #      damage.run<-value.lost+contr.switch*cumsum(exp(-d.rate*times)*effort*control.cost*ifelse(times<=time.stop,1,0))
+      costs.run<-contr.switch*effort*control.cost*ifelse(times<=time.stop,1,0)
+    } else {
+      #      damage.run<-value.lost+contr.switch*cumsum(exp(-d.rate*times)*effort*control.cost*ifelse(times<=time.stop,1,0)*I)
+       costs.run<-contr.switch*effort*control.cost*ifelse(times<=time.stop,1,0)*I
+    }
+    return(costs.run)
   })
 }
 
 # model variability: select parameters to switch
 variability<-function(params,contr.switch=1,runs=1){
   params.run<-params # load other parameters which do not change
-# rate of spread
-  if (params$beta.var==0){
-    params.run$beta<-rep(params$beta,runs)
-  } else {
-    params.run$beta<-exp(rnorm(runs,log(params$beta),params$beta.var*params$beta))
-  }
-# initial load
-  if (params$y0.var==0){
-    params.run$y0<-rep(params$y0,runs)
-  } else {
-    params.run$y0<-exp(rnorm(runs,log(params$y0),params$y0.var))
-  }
-# control effectiveness
+  # rate of spread ~ triangular
+  params.run$beta<-rtriangle(runs,a=params$beta.var1,b=params$beta.var2,c=params$beta)
+  # initial load ~ triangular
+  params.run$y0<-rtriangle(runs,a=params$y0.var1,b=params$y0.var2,c=params$y0)
+  # control effectiveness - fixed or ~ triangular - not implemented
   if (params$control.varmodel==0){
     params.run$contr<-rep(ifelse(contr.switch==0,0,params$contr),runs)
   } else {
@@ -58,18 +81,43 @@ variability<-function(params,contr.switch=1,runs=1){
   return(params.run)
 }
 
-# mapping scenarios onto parameters
-# in score.map: likelihood, impact, value
-scores.map <- matrix(c(
-  rep(1:5,25),
-  rep(rep(1:5,rep(5,5)),5),
-  rep(1:5,rep(25,5)),
-#  rep(c(0.1,0.2,0.3,0.5,0.8),25), # beta
-#  rep(1,125), # y0
-  rep(rep(c(0.1,0.2,0.3,0.5,0.8),rep(5,5)),5), # beta
-  rep(c(1,2,5,10,20),25), # y0
-  rep(1,125)/1500, # control effectiveness
-  5000*rep(1:5,rep(25,5)) # value
-),byrow=F,ncol=7)
+# default set of parameters
+defaultScenario<-function(){
+  return(data.frame("ID"=1,
+                    "Pest"="Generic",
+                    "Host"="Generic",
+                    "UK"="Present",
+                    "N"=100000,
+                    "beta"=0.5,
+                    "y0"=10000,
+                    "value.timber"=171,
+                    "value.recreation"=445,
+                    "value.landscape"=160,
+                    "value.biodiversity"=470,
+                    "value.carbon"=246,
+                    "contr"=0.6,
+                    "control.cost"=30000,
+                    "control.varmodel"=0,
+                    "control.prop"=1,
+                    "Nrep"=100,
+                    "d.rate"=0.035,
+                    "effort"=0,
+                    "beta.base"=0.5,
+                    "beta.var1"=0.375,
+                    "beta.var2"=0.625,
+                    "y0.base"=10,
+                    "y0.var1"=7.5,
+                    "y0.var2"=12.5,
+                    "time.start"=0,
+                    "time.stop"=5,
+                    "seed"=1500
+  ))
+}
 
+scenario.headings<-c("ID","Name of pest","Type of host","Present or not",
+                     "Total area","Rate of spread (per year)","Initial infected area (ha)","Value of timber (GBP)","Recreational value (GBP)","Landscape value (GBP)",
+                     "Biodiversity value (GBP)","Carbon value (GBP)","Control effectiveness","Control cost (person-year)","TBA",
+                     "TBA","Number of replicates","Annual discount rate","Current effort",
+                     "Current avg rate","Current low rate","Current high rate","Current avg inf. area",
+                     "Current low inf. area","Current high inf. area","Start of treatment (yrs)","End of treatment (yrs)","TBA")
 
