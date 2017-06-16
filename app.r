@@ -791,7 +791,7 @@ ui <- navbarPage("FC Tool",id="select.tab",
                                h5("Download current scenario:"),                              
                                downloadButton('downloadPars', 'Download scenario'),
                                tags$hr(),
-                               p("Sample spreadsheet (examples.csv) can be found",a(href="https://app.box.com/s/4ygp06xyujks2b5ye548xdn12v9xmjap","here.")," Please download it to your computer and then use the above menu to upload it to the FC Tool")
+                               p("Sample spreadsheet (examples.csv) can be found",a(href="https://app.box.com/s/4ygp06xyujks2b5ye548xdn12v9xmjap","here.",target="_blank")," Please download it to your computer and then use the above menu to upload it to the FC Tool")
                       )
            ),
 ## input and output menu ----
@@ -847,12 +847,12 @@ ui <- navbarPage("FC Tool",id="select.tab",
                       helpText(h5("Warning: This is a development version. Only limited checking of variables and parameters is performed, hence the tool can break down or produce unreliable results if parameters are entered outside the realistic range.")),
                       tags$hr(),
                       helpText(h5("Version history:")),
-                      helpText("Version 0.1: single zone; eradication control; control cost for whole area; value proportional to healthy area."),
-                      helpText("Version 0.2: improved GUI and additional inputs/outputs; linked to PHRR"),
-                      helpText("Version 0.3: changes to menu; system of equations rather than a single one; discounted economics"),
-                      helpText("Version 1.0: moved to a single file; use triangular distributions; changed to years; control only the first 5 years; profit changed to damage; changed from scenarios to parameters"),
-                      helpText("Version 1.1: damage function now includes two classes of values; expanded values input; improved front end and saving and loading scenarios"),
-                      helpText("Version 2.0: June 2017 changes for SG meeting")
+                      helpText("Version 1.1: single zone; eradication control; control cost for whole area; value proportional to healthy area."),
+                      helpText("Version 1.2: improved GUI and additional inputs/outputs; linked to PHRR"),
+                      helpText("Version 1.3: changes to menu; system of equations rather than a single one; discounted economics"),
+                      helpText("Version 2.0: moved to a single file; use triangular distributions; changed to years; control only the first 5 years; profit changed to damage; changed from scenarios to parameters"),
+                      helpText("Version 2.1: damage function now includes two classes of values; expanded values input; improved front end and saving and loading scenarios"),
+                      helpText("Version 3.0: June 2017 changes for SG meeting")
                     )
            )
 )
